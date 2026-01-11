@@ -1,19 +1,37 @@
 from django.shortcuts import render, redirect
-from django.http import HttpResponse
-from myApp.models import Contact
+from django.core.exceptions import ValidationError
+from django.contrib import messages
+from .models import Contact
 
 # Create your views here.
 def contact_form(request):
     return render(request, 'contact.html')
 
 def submit_contact(request):
-    if request.method == 'POST':
-        name = request.POST.get('name')
-        message = request.POST.get('message')
+    if request.method == "POST":
+        try:
+            contact = Contact(
+                name=request.POST.get("name"),
+                email=request.POST.get("email"),
+                phone=request.POST.get("phone"),
+                subject=request.POST.get("subject"),
+                message=request.POST.get("message"),
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
 
-        if name and message:
-            Contact.objects.create(name=name, message=message)
-            return HttpResponse(f"Thankyou! {name}, for your message")
-        else:
-            return HttpResponse("Please provide both name and message.")
-    return redirect('contact_form')
+            # 🔑 This triggers unique constraint check
+            contact.full_clean()
+            contact.save()
+
+            messages.success(request, "Message sent successfully ✅")
+            return redirect("submit_contact")
+
+        except ValidationError as e:
+            # 🔥 Display field-wise errors
+            for field, errors in e.message_dict.items():
+                for error in errors:
+                    messages.error(request, f"{field} : {error}")
+
+            return redirect("submit_contact")
+
+    return render(request, "contact_error.html")
